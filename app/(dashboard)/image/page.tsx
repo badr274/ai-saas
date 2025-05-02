@@ -133,7 +133,7 @@ const ImageGenerationPage = () => {
         )}
         <div className="px-4 lg:px-8 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
           {images.map((src, idx) => (
-            <Card key={src} className="rounded-lg overflow-hidden">
+            <Card key={idx} className="rounded-lg overflow-hidden">
               <div className="relative aspect-square">
                 <Image src={src} fill alt="Image" />
               </div>

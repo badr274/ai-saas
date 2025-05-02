@@ -13,16 +13,16 @@ export async function POST(req: Request) {
     // تأكد أن amount رقم صحيح
     amount = parseInt(amount, 10);
     if (isNaN(amount) || amount <= 0) {
-      amount = 1; // fallback لو مش رقم أو رقم غلط
+      amount = 1;
     }
 
     if (!userId) {
       return new NextResponse("Unauthorized", { status: 401 });
     }
 
-    const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
-    if (!STABILITY_API_KEY) {
-      return new NextResponse("Stability AI API key not configured", {
+    const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
+    if (!HUGGINGFACE_API_KEY) {
+      return new NextResponse("Hugging Face API key not configured", {
         status: 500,
       });
     }
@@ -32,47 +32,53 @@ export async function POST(req: Request) {
     }
 
     const images: string[] = [];
-    // Check user free trial limition
+
     const freeTrial = await checkApiLimit();
     const isPro = await checkSubscription();
     if (!freeTrial && !isPro) {
       return new NextResponse("Free trial has expired.", { status: 403 });
     }
+    const variations = [
+      "in a mystical forest",
+      "as a futuristic robot",
+      "surrounded by neon lights",
+      "in ancient ruins",
+      "floating in space",
+      "in an abstract art style",
+      "made of crystals",
+      "in a cinematic scene",
+      "painted by Van Gogh",
+      "during sunset on a mountain",
+    ];
     for (let i = 0; i < amount; i++) {
-      // إعداد FormData
-      const formData = new FormData();
-      formData.append("prompt", prompt);
-      formData.append("output_format", "png"); // تحديد تنسيق الصورة كـ PNG
-
-      // إرسال البيانات إلى Stability AI باستخدام multipart/form-data
+      const randomSuffix =
+        variations[Math.floor(Math.random() * variations.length)];
+      const customPrompt = `${prompt} ${randomSuffix}`;
       const response = await fetch(
-        "https://api.stability.ai/v2beta/stable-image/generate/core",
+        "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev",
         {
           method: "POST",
           headers: {
-            Authorization: `Bearer ${STABILITY_API_KEY}`,
-            Accept: "image/*", // Accept الصورة في أي نوع
+            Authorization: `Bearer ${HUGGINGFACE_API_KEY}`,
+            "Content-Type": "application/json",
+            Accept: "application/json",
           },
-          body: formData,
+          body: JSON.stringify({ inputs: customPrompt }),
         }
       );
 
       if (!response.ok) {
         const error = await response.text();
         console.error(`Error generating image ${i + 1}:`, error);
-        continue; // لو في مشكلة في صورة معينة، نكمل لباقي الصور
+        continue;
       }
 
-      const data = await response.blob(); // استخدم blob لتحميل الصورة
-
-      // تحويل blob إلى Base64 باستخدام Buffer
-      const buffer = await data.arrayBuffer(); // تحويل blob إلى ArrayBuffer
-      const base64Image = Buffer.from(buffer).toString("base64"); // تحويل ArrayBuffer إلى Base64
-
-      const imageDataUrl = `data:image/png;base64,${base64Image}`; // صيغة Data URL
+      const arrayBuffer = await response.arrayBuffer();
+      const base64Image = Buffer.from(arrayBuffer).toString("base64");
+      const imageDataUrl = `data:image/png;base64,${base64Image}`;
       images.push(imageDataUrl);
     }
-    // Increase free trial limition
+
     if (!isPro) {
       await increaseApiLimit();
     }
@@ -80,11 +86,11 @@ export async function POST(req: Request) {
     return new NextResponse(JSON.stringify({ images }), {
       status: 200,
       headers: {
-        "Content-Type": "application/json", // الرد سيكون JSON
+        "Content-Type": "application/json",
       },
     });
   } catch (error) {
-    console.error(error);
+    console.error("Server error:", error);
     return new NextResponse("Internal Server Error", { status: 500 });
   }
 }

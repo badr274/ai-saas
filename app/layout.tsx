@@ -31,7 +31,7 @@ export default function RootLayout({
 }>) {
   return (
     <ClerkProvider>
-      <html lang="en">
+      <html lang="en" className="hydrated">
         <body
           className={`${geistSans.variable} ${geistMono.variable} antialiased`}
           cz-shortcut-listen="true"

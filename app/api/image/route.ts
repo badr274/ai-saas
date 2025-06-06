@@ -6,38 +6,42 @@ import { NextResponse } from "next/server";
 export async function POST(req: Request) {
   try {
     const { userId } = await auth();
+    if (!userId) {
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    }
+
     const body = await req.json();
     // eslint-disable-next-line prefer-const
     let { prompt, amount = 1 } = body;
-
-    // تأكد أن amount رقم صحيح
     amount = parseInt(amount, 10);
+    if (!prompt) {
+      return NextResponse.json(
+        { error: "Prompt is required" },
+        { status: 400 }
+      );
+    }
     if (isNaN(amount) || amount <= 0) {
       amount = 1;
     }
 
-    if (!userId) {
-      return new NextResponse("Unauthorized", { status: 401 });
-    }
-
     const HUGGINGFACE_API_KEY = process.env.HUGGINGFACE_API_KEY;
     if (!HUGGINGFACE_API_KEY) {
-      return new NextResponse("Hugging Face API key not configured", {
-        status: 500,
-      });
+      return NextResponse.json(
+        { error: "Hugging Face API key not configured" },
+        { status: 500 }
+      );
     }
 
-    if (!prompt) {
-      return new NextResponse("Prompt is required", { status: 400 });
-    }
-
-    const images: string[] = [];
-
+    // تحقق من الاشتراك أو الرصيد المجاني
     const freeTrial = await checkApiLimit();
     const isPro = await checkSubscription();
     if (!freeTrial && !isPro) {
-      return new NextResponse("Free trial has expired.", { status: 403 });
+      return NextResponse.json(
+        { error: "Free trial has expired." },
+        { status: 403 }
+      );
     }
+
     const variations = [
       "in a mystical forest",
       "as a futuristic robot",
@@ -50,10 +54,14 @@ export async function POST(req: Request) {
       "painted by Van Gogh",
       "during sunset on a mountain",
     ];
+
+    const images: string[] = [];
+
     for (let i = 0; i < amount; i++) {
       const randomSuffix =
         variations[Math.floor(Math.random() * variations.length)];
       const customPrompt = `${prompt} ${randomSuffix}`;
+
       const response = await fetch(
         "https://api-inference.huggingface.co/models/black-forest-labs/FLUX.1-dev",
         {
@@ -68,29 +76,43 @@ export async function POST(req: Request) {
       );
 
       if (!response.ok) {
-        const error = await response.text();
-        console.error(`Error generating image ${i + 1}:`, error);
+        const errorText = await response.text();
+        console.error(`Error generating image ${i + 1}:`, errorText);
         continue;
       }
 
-      const arrayBuffer = await response.arrayBuffer();
-      const base64Image = Buffer.from(arrayBuffer).toString("base64");
-      const imageDataUrl = `data:image/png;base64,${base64Image}`;
-      images.push(imageDataUrl);
+      const data = await response.json();
+      console.log(`Response for image ${i + 1}:`, data);
+
+      // حسب شكل الرد، عشان يدعم أكثر من صيغة:
+      if (Array.isArray(data) && data.length > 0) {
+        // لو الرد array من نصوص (base64 أو url)
+        if (typeof data[0] === "string") {
+          images.push(data[0]);
+        } else if (data[0].image) {
+          images.push(data[0].image);
+        } else {
+          console.warn("Unknown array item format:", data[0]);
+        }
+      } else if (typeof data === "string") {
+        images.push(data);
+      } else if (data.image) {
+        images.push(data.image);
+      } else {
+        console.warn("Unexpected response format:", data);
+      }
     }
 
     if (!isPro) {
       await increaseApiLimit();
     }
 
-    return new NextResponse(JSON.stringify({ images }), {
-      status: 200,
-      headers: {
-        "Content-Type": "application/json",
-      },
-    });
+    return NextResponse.json({ images });
   } catch (error) {
     console.error("Server error:", error);
-    return new NextResponse("Internal Server Error", { status: 500 });
+    return NextResponse.json(
+      { error: "Internal Server Error" },
+      { status: 500 }
+    );
   }
 }

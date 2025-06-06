@@ -21,7 +21,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Card, CardFooter } from "@/components/ui/card";
-import Image from "next/image";
+// import Image from "next/image";
 import { onOpen } from "@/redux/features/ProModalSlice";
 import { useAppDispatch } from "@/redux/hooks";
 import toast from "react-hot-toast";
@@ -41,6 +41,7 @@ const ImageGenerationPage = () => {
   const onSubmit = async (values: z.infer<typeof formSchema>) => {
     try {
       const res = await axios.post("/api/image", values);
+      console.log(res.data.images);
       if (res.data.images) {
         setImages(res.data.images);
       } else {
@@ -58,6 +59,7 @@ const ImageGenerationPage = () => {
       router.refresh();
     }
   };
+
   return (
     <div>
       <Heading
@@ -135,8 +137,20 @@ const ImageGenerationPage = () => {
           {images.map((src, idx) => (
             <Card key={idx} className="rounded-lg overflow-hidden">
               <div className="relative aspect-square">
-                <Image src={src} fill alt="Image" />
+                <img
+                  src={`data:image/png;base64,${src}`}
+                  alt={`Generated image ${idx}`}
+                  style={{
+                    width: "300px",
+                    height: "300px",
+                    objectFit: "cover",
+                  }}
+                  loading="lazy"
+                  className="w-full h-full object-cover"
+                  onError={(e) => console.log("Image failed to load", e)}
+                />
               </div>
+
               <CardFooter className="px-3">
                 <Button
                   variant="secondary"
